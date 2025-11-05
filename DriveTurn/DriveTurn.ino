@@ -58,8 +58,7 @@ bool TurnByDegree(int32_t UserDegreeTurn2, int userDirection, bool runOnce) {
   static int32_t RightCalibratedTurn;  // right-turn target angle
   static int32_t LeftCalibratedTurn;   // left-turn target angle
 
-  if (runOnce)  // initialize targets only once
-  {
+  if (runOnce)  { // initialize targets only once
     currentAngle = getTurnAngleInDegrees();                                  // read initial heading
     RightCalibratedTurn = calibrateTurnAng(currentAngle - UserDegreeTurn2);  // right target
     LeftCalibratedTurn = calibrateTurnAng(currentAngle + UserDegreeTurn2);   // left target
@@ -115,7 +114,6 @@ void DriveTurn(int32_t userDegreeTurn3, int userDirection) {
     angleBreakpointReached = TurnByDegree(userDegreeTurn3, userDirection, runOnce);
     runOnce = false;  // targets initialized only on first call
   }
-
   motors.setSpeeds(0, 0);  // stop motors precisely at the target angle
 }
 
@@ -132,7 +130,7 @@ void setup() {
 
 // Main loop: execute one 90° left turn and drive forward once
 void loop() {
-  DriveTurn(87, 1);  // perform 90° left turn (1 = left)
+  DriveTurn(30, 1);  // perform 90° left turn (1 = left)
   /*motors.setSpeeds(v_max, v_max); // straighten out and drive forward
     delay(500);                    // drive straight for 1 second*/
   DriveTurn(87, 1);        // perform 90° left turn (1 = left)

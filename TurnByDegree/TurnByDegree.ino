@@ -29,8 +29,7 @@ uint16_t gyroLastUpdate = 0;
 // OptimalTurnSpeed for the gyro to be as precise as possible.
 int optimalTurnSpeed = 100;
 
-void setup()
-{
+void setup(){
   Serial.begin(9600);
   turnSensorSetup();
   delay(500);
@@ -38,13 +37,11 @@ void setup()
   OLED.clear();
 }
 
-int32_t getTurnAngleInDegrees()
-{
+int32_t getTurnAngleInDegrees() {
   return ((int32_t)turnAngle >> 16) * 360 >> 16;
 }
 
-int32_t calibrateTurnAng(int32_t Degree)
-{
+int32_t calibrateTurnAng(int32_t Degree) {
   //Handles logic if angle becomes greater than 180 or less than -180.
   if (Degree > 180)
   {
@@ -60,8 +57,7 @@ int32_t calibrateTurnAng(int32_t Degree)
   }
 }
 
-void TurnByDegree(int32_t UserDegreeTurn, int userDirection)
-{
+void TurnByDegree(int32_t UserDegreeTurn, int userDirection){
   // Saves the current turn angle in degrees
   int32_t currentAngle = getTurnAngleInDegrees();
   // Calculates the calibrated turn angle, by taking the current angle and adding/subtracting the user input angle
@@ -112,10 +108,13 @@ void TurnByDegree(int32_t UserDegreeTurn, int userDirection)
 
 void loop()
 {
-  TurnByDegree(90, 0); // Right (0) turn 90 degrees
+  TurnByDegree(180, 0); // Right (0) turn 90 degrees
   delay(3000);
-  TurnByDegree(90, 1); // Left (1) turn 90 degrees
-  delay(3000);
+  /*TurnByDegree(90, 1); // Left (1) turn 90 degrees
+  delay(3000);*/
+  while(1){
+    
+  }
 }
 
 // Should be called in setup.
