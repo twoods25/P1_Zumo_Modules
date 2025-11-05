@@ -76,7 +76,6 @@ void TurnByDegree(int32_t UserDegreeTurn, int userDirection){
       currentAngle = getTurnAngleInDegrees();
       // Sets the motors to turn right
       motors.setSpeeds(optimalTurnSpeed, -optimalTurnSpeed);
-
       // Visual
       Serial.println("Degree: " + (String)currentAngle);
       OLED.clear();
