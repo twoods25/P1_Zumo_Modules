@@ -1,107 +1,106 @@
-#include <Wire.h>
-#include <Zumo32U4.h>
+#include <Wire.h>      // inkluderer bibliotek
+#include <Zumo32U4.h>  // inkluderer bibliotek
 
-Zumo32U4Motors motors;
-Zumo32U4LineSensors lineSensors;
-Zumo32U4OLED OLED;
+Zumo32U4Motors motors;            // inkluderer motorer
+Zumo32U4LineSensors lineSensors;  // inkluderer
+Zumo32U4OLED OLED;                // inkluderer OLED-skærm
 
-const uint16_t speed = 100;
-int16_t lastError = 0;
+#define NUM_SENSORS 3                         // definerer antal sensorer
+unsigned short lineSensorValues[NUM_SENSORS];  // gemmer målingerne i en array
 
-#define NUM_SENSORS 3
-uint16_t lineSensorValues[NUM_SENSORS];
+unsigned char speed = 100;  // sætter hastighed (unsigned short = 0 til 65535)
 
-void calibrateSensors() {
-  for (uint16_t i=0; i<120; i++) {
-    if (i>30 && i<=90) {
-      motors.setSpeeds(-100, 100);
-    } 
-    else {
-      motors.setSpeeds(100, -100);
-    }
-    lineSensors.calibrate();
-  }
-  motors.setSpeeds(0,0);
+unsigned short hvid = 500;
+
+unsigned char a;
+unsigned char b;
+unsigned char c;
+unsigned char d;
+unsigned char e;
+unsigned char f;
+
+void printReadingsToSerial() {
+  char buffer[80];                                                                               // opretter tegn-array med plads til 80 tegn
+  sprintf(buffer,                                                                                // i stedet for Serial.print(), da sprintf() er pæn og i en streng
+          "%4d %4d | %4d %4d | %4d %4d     %4d | %4d | %4d     %3d %3d | %3d %3d | %3d %3d \n",  // %d = udskriv et helt tal, 4 = mindst fire karakterer (da 2000 er max), \n = linjeskift
+          lineSensors.calibratedMinimumOn[0],
+          lineSensors.calibratedMaximumOn[0],
+          lineSensors.calibratedMinimumOn[1],
+          lineSensors.calibratedMaximumOn[1],
+          lineSensors.calibratedMinimumOn[2],
+          lineSensors.calibratedMaximumOn[2],
+          lineSensorValues[0],
+          lineSensorValues[1],
+          lineSensorValues[2],
+          a, b, c, d, e, f);
+  Serial.print(buffer);  // print strengen
 }
 
-void setup() {
-  lineSensors.initThreeSensors();
-  Serial.begin(9600);
-  calibrateSensors();
+void readLineSensors() {
+  lineSensors.read(lineSensorValues, QTR_EMITTERS_ON);  // læser sensorerne og gemmer værdierne i arrayet [NUM_SENSORS]
 }
 
-void followLine(){
-  int16_t position = lineSensors.readLine(lineSensorValues, QTR_EMITTERS_ON);
-  int16_t error = position - 1000;
-  int16_t speedDifference = error / 4 + 6 * (error - lastError);
-  lastError = error;
-  int16_t leftSpeed = (int16_t)speed + speedDifference;
-  int16_t rightSpeed = (int16_t)speed - speedDifference;
-  leftSpeed = constrain(leftSpeed, 0, (int16_t)speed);
-  rightSpeed = constrain(rightSpeed, 0, (int16_t)speed);
-  motors.setSpeeds(leftSpeed, rightSpeed);
-}
-
-void printReadings() {
-  char buffer[80];
-  sprintf(buffer, "%4d %4d %4d\n", lineSensorValues[0], lineSensorValues[1], lineSensorValues[2]);
-  Serial.print(buffer);
-}
-
-void loop() {
-  followLine();
-}
-
-
-/*
 void forward() {
-  motors.setSpeeds(speed,speed);
+  motors.setSpeeds(speed, speed);  // kør med defineret hastighed
+}
+
+void backwards() {
+  motors.setSpeeds(-speed, -speed);  // kør baglæns med defineret hastighed
+}
+
+void turnLeft() {
+  motors.setSpeeds(-speed, speed);  // drej til venstre med defineret hastighed
+}
+
+void turnRight() {
+  motors.setSpeeds(speed, -speed);  // drej til højre med defineret hastighed
 }
 
 void stop() {
-  motors.setSpeeds(0,0);
+  motors.setSpeeds(0, 0);  // stop
 }
 
-bool leftSensorWhite(){
-  return (lineSensorValues[0] >= 190 && lineSensorValues[0] <= 270);
+void followLine() {
+  while (lineSensorValues[1] > hvid && lineSensorValues[0] <= hvid && lineSensorValues[2] <= hvid) {
+    forward();  // så længe kun venstre sensor ser linjen: kør
+    readLineSensors();
+  }
+
+  while (lineSensorValues[0] > hvid || lineSensorValues[2] > hvid) {
+    if (lineSensorValues[0] > hvid) {
+      turnLeft();
+      readLineSensors();
+    }
+    // så længe venstre sensor ikke ser linjen: drej til venstre
+    else if (lineSensorValues[2] > hvid) {
+      turnRight();
+      readLineSensors();
+    }
+  }
 }
 
-bool middleSensorBlack(){
-  return (lineSensorValues[1] >= 700 && lineSensorValues[1] <= 950);
+void calibrateSensors() {
+  lineSensors.calibrate();  // gemmer min-og max-værdier for hver sensor fra arrayet [NUM_SENSORS] i lineSensors.calibratedMinimum[NUM_SENSORS] og lineSensors.calibratedMaximum[NUM_SENSORS]
 }
 
-bool rightSensorWhite(){
-  return (lineSensorValues[2] >= 190 && lineSensorValues[2] <= 270);
+void normalize() {
+  a = lineSensors.calibratedMinimumOn[0] / 2000.0 * 100; // deler med 2000.0 som en float eller double - ikke int (heltal)
+  b = lineSensors.calibratedMaximumOn[0] / 2000.0 * 100;
+  c = lineSensors.calibratedMinimumOn[1] / 2000.0 * 100;
+  d = lineSensors.calibratedMaximumOn[1] / 2000.0 * 100;
+  e = lineSensors.calibratedMinimumOn[2] / 2000.0 * 100;
+  f = lineSensors.calibratedMaximumOn[2] / 2000.0 * 100;
 }
 
+void setup() {
+  lineSensors.initThreeSensors();  // initialiserer de tre sensorer
+  Serial.begin(9600);
+}
 
 void loop() {
   readLineSensors();
-  printReadings();
-  
-  switch() {
-    case 0: 
-      while (leftSensorWhite() && middleSensorBlack() && rightSensorWhite()) {
-      forward();
-      }
-      break;
-
-    case 1: 
-      while (!rightSensorWhite()) {
-      TurnByDegree(5,0);
-      delay(1000);
-      forward();
-      }
-      break;
-    
-    case 2:
-      while (!leftSensorWhite()) {
-      TurnByDegree(5,1)
-      delay(1000);
-      forward();
-      }
-      break;
-
-  delay(200);
+  calibrateSensors();
+  normalize();
+  printReadingsToSerial();
+  followLine();
 }
-*/
