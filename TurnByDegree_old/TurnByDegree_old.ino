@@ -29,7 +29,7 @@ uint16_t gyroLastUpdate = 0;
 // OptimalTurnSpeed for the gyro to be as precise as possible.
 int optimalTurnSpeed = 100;
 
-void setup() {
+void setup(){
   Serial.begin(9600);
   turnSensorSetup();
   delay(500);
@@ -38,75 +38,87 @@ void setup() {
 }
 
 int32_t getTurnAngleInDegrees() {
-  // 360 degrees corresponds to a full 32-bit rotation (2^32 units)
-  // So 1 degree = 2^32 / 360 ≈ 11930465.78 units
-  return ((int64_t)turnAngle * 360) / 4294967296;  // = 2^32
+  return ((int32_t)turnAngle >> 16) * 360 >> 16;
 }
 
-void TurnByDegree(int32_t userTurn) {
-  int32_t startAngle = getTurnAngleInDegrees();
-  int32_t currentAngle = startAngle;
-  int32_t delta = 0;
+int32_t calibrateTurnAng(int32_t Degree) {
+  //Handles logic if angle becomes greater than 180 or less than -180.
+  if (Degree > 180)
+  {
+    return Degree - 360;
+  }
+  else if (Degree < -180)
+  {
+    return Degree + 360;
+  }
+  else
+  {
+    return Degree;
+  }
+}
 
-  int leftSpeed, rightSpeed;
+void TurnByDegree(int32_t UserDegreeTurn, int userDirection){
+  // Saves the current turn angle in degrees
+  int32_t currentAngle = getTurnAngleInDegrees();
+  // Calculates the calibrated turn angle, by taking the current angle and adding/subtracting the user input angle
+  int32_t RightCalibratedTurn = calibrateTurnAng(currentAngle - UserDegreeTurn); // Need to handle a -270 degree turn case ----------------------------------
+  int32_t LeftCalibratedTurn = calibrateTurnAng(currentAngle + UserDegreeTurn);
 
-  // figure out which way to spin
-  if (userTurn > 0) {         // turn right (CW)
-    leftSpeed = optimalTurnSpeed;
-    rightSpeed = -optimalTurnSpeed;
-  } else if (userTurn < 0) {  // turn left (CCW)
-    leftSpeed = -optimalTurnSpeed;
-    rightSpeed = optimalTurnSpeed;
-  } else {
+  // A switch to choose between right and left turn on 1 or 0 input.
+  switch (userDirection)
+  {
+  case 0: // Right turn //While the current turn angle is greater than the calibrated turn angle, keep turning right
+    while (currentAngle > RightCalibratedTurn)
+    {
+      // Updates the turn angle, by reading the gyro
+      turnSensorUpdate();
+      // saves the updated turn angle in degrees
+      currentAngle = getTurnAngleInDegrees();
+      // Sets the motors to turn right
+      motors.setSpeeds(optimalTurnSpeed, -optimalTurnSpeed);
+      // Visual
+      Serial.println("Degree: " + (String)currentAngle);
+      OLED.clear();
+    }
+    // Stops the motors after the turn is complete.
     motors.setSpeeds(0, 0);
-    return;
-  }
-  motors.setSpeeds(leftSpeed, rightSpeed);
-  unsigned long lastUpdate = millis();
+    break;
+  case 1: // Left turn //While the current turn angle is less than the calibrated turn angle, keep turning left
+    while (currentAngle < LeftCalibratedTurn)
+    {
+      // Updates the turn angle, by reading the gyro
+      turnSensorUpdate();
+      // saves the updated turn angle in degrees
+      currentAngle = getTurnAngleInDegrees();
+      // Sets the motors to turn left
+      motors.setSpeeds(-optimalTurnSpeed, optimalTurnSpeed);
 
-  while (true) {
-    turnSensorUpdate();
-    currentAngle = getTurnAngleInDegrees();
-    delta = currentAngle - startAngle;
-
-    // keep angle in range [-180, 180]
-    if (delta > 180) delta -= 360;
-    if (delta < -180) delta += 360;
-
-    // stop once we hit or pass target
-    if ((userTurn > 0 && delta >= userTurn) || (userTurn < 0 && delta <= userTurn)) {
-      break;
+      // Visual
+      Serial.println("Degree: " + (String)currentAngle);
+      OLED.clear();
     }
-
-    // print every ~100ms for debug // I had to insert a way to watch how the robot is rotating.
-    if (millis() - lastUpdate > 100) {
-      Serial.print("Angle: ");
-      Serial.print(currentAngle);
-      Serial.print("  Δ=");
-      Serial.println(delta);
-      lastUpdate = millis();
-    }
+    // Stops the motors after the turn is complete.
+    motors.setSpeeds(0, 0);
+    break;
+  default:
+    break;
   }
-
-  motors.setSpeeds(0, 0);
-  delay(100);
 }
 
-void loop() {
-  //To use this func copy all code -loop, when the gyro is done calibrating click button A, to start the program in the loop.
-  //Turns Left
-  TurnByDegree(-90);
+void loop()
+{
+  TurnByDegree(180, 0); // Right (0) turn 90 degrees
   delay(3000);
-  
-  //Turns Right
-  TurnByDegree(90);
-  delay(3000);
-  while (1) {
+  /*TurnByDegree(90, 1); // Left (1) turn 90 degrees
+  delay(3000);*/
+  while(1){
+    
   }
 }
 
 // Should be called in setup.
-void turnSensorSetup() {
+void turnSensorSetup()
+{
   Wire.begin();
   imu.init();
   imu.enableDefault();
@@ -123,9 +135,11 @@ void turnSensorSetup() {
 
   // Calibrate the gyro.
   int32_t total = 0;
-  for (uint16_t i = 0; i < 1024; i++) {
+  for (uint16_t i = 0; i < 1024; i++)
+  {
     // Wait for new data to be available, then read it.
-    while (!imu.gyroDataReady()) {
+    while (!imu.gyroDataReady())
+    {
     }
     imu.readGyro();
 
@@ -139,7 +153,8 @@ void turnSensorSetup() {
   // user presses A.
   OLED.clear();
   turnSensorReset();
-  while (!buttonA.getSingleDebouncedRelease()) {
+  while (!buttonA.getSingleDebouncedRelease())
+  {
     turnSensorUpdate();
     OLED.gotoXY(0, 0);
     // do some math and pointer magic to turn angle in seconds to angle in degrees
@@ -151,17 +166,19 @@ void turnSensorSetup() {
 
 // This should be called to set the starting point for measuring
 // a turn.  After calling this, turnAngle will be 0.
-void turnSensorReset() {
+void turnSensorReset()
+{
   gyroLastUpdate = micros();
   turnAngle = 0;
 }
 
 // Read the gyro and update the angle.  This should be called as
 // frequently as possible while using the gyro to do turns.
-void turnSensorUpdate() {
+void turnSensorUpdate()
+{
   // Read the measurements from the gyro.
   imu.readGyro();
-  turnRate = -(imu.g.z - gyroOffset);
+  turnRate = imu.g.z - gyroOffset;
 
   // Figure out how much time has passed since the last update (dt)
   uint16_t m = micros();

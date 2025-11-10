@@ -12,7 +12,6 @@ int threshold = 1000;
 int Direction = 0;
 int subDirection = 2;
 
-
 // the uncalibrated line sensor reading are between 0 (very bright) and 2000 (very dark) 280-2000 left(0) and right(2): middle(1) = 140-1280
 void readLineSensors()
 {
@@ -55,8 +54,10 @@ void options()
         while (lineSensorValues[Direction] < 1000)
         {
             readLineSensors();
-            if (Direction == 0) motors.setSpeeds(-speed, speed);
-            else motors.setSpeeds(speed, -speed);
+            if (Direction == 0)
+                motors.setSpeeds(-speed, speed);
+            else
+                motors.setSpeeds(speed, -speed);
         }
     }
     else if ((lineSensorValues[Direction] > 1000) && (lineSensorValues[1] > 600) && (lineSensorValues[subDirection] > 1000))
@@ -64,14 +65,18 @@ void options()
         while (lineSensorValues[Direction] > 1000)
         {
             readLineSensors();
-            if (Direction == 0) motors.setSpeeds(speed, -speed);
-            else motors.setSpeeds(-speed, speed);
+            if (Direction == 0)
+                motors.setSpeeds(speed, -speed);
+            else
+                motors.setSpeeds(-speed, speed);
         }
     }
-    else if ((lineSensorValues[Direction] > 1000) && (lineSensorValues[1] > 600) && (lineSensorValues[subDirection] < 1000)){
-        if (Direction == 0) motors.setSpeeds(speed, speed/2);
-            else motors.setSpeeds(speed/2, speed);
-        
+    else if ((lineSensorValues[Direction] > 1000) && (lineSensorValues[1] > 600) && (lineSensorValues[subDirection] < 1000))
+    {
+        if (Direction == 0)
+            motors.setSpeeds(speed, speed / 2);
+        else
+            motors.setSpeeds(speed / 2, speed);
     }
 }
 
