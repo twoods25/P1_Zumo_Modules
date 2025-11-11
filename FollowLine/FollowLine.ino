@@ -5,7 +5,7 @@ Zumo32U4Motors motors;            // inkluderer motorer
 Zumo32U4LineSensors lineSensors;  // inkluderer
 Zumo32U4OLED OLED;                // inkluderer OLED-skærm
 
-#define NUM_SENSORS 3                         // definerer antal sensorer
+#define NUM_SENSORS 3                          // definerer antal sensorer
 unsigned short lineSensorValues[NUM_SENSORS];  // gemmer målingerne i en array
 
 unsigned char speed = 100;  // sætter hastighed (unsigned short = 0 til 65535)
@@ -19,10 +19,15 @@ unsigned char d;
 unsigned char e;
 unsigned char f;
 
+unsigned short readLine;
+unsigned int * sensor_values;
+unsigned char readMode = QTR_EMITTERS_ON;
+unsigned char white_line = 0;
+
 void printReadingsToSerial() {
   char buffer[80];                                                                               // opretter tegn-array med plads til 80 tegn
   sprintf(buffer,                                                                                // i stedet for Serial.print(), da sprintf() er pæn og i en streng
-          "%4d %4d | %4d %4d | %4d %4d     %4d | %4d | %4d     %3d %3d | %3d %3d | %3d %3d \n",  // %d = udskriv et helt tal, 4 = mindst fire karakterer (da 2000 er max), \n = linjeskift
+          "%4d %4d | %4d %4d | %4d %4d     %4d | %4d | %4d     %3d %3d | %3d %3d | %3d %3d | %8d \n",  // %d = udskriv et helt tal, 4 = mindst fire karakterer (da 2000 er max), \n = linjeskift
           lineSensors.calibratedMinimumOn[0],
           lineSensors.calibratedMaximumOn[0],
           lineSensors.calibratedMinimumOn[1],
@@ -32,7 +37,8 @@ void printReadingsToSerial() {
           lineSensorValues[0],
           lineSensorValues[1],
           lineSensorValues[2],
-          a, b, c, d, e, f);
+          a, b, c, d, e, f),
+          lineSensors.readLine(lineSensorValues);
   Serial.print(buffer);  // print strengen
 }
 
@@ -84,7 +90,7 @@ void calibrateSensors() {
 }
 
 void normalize() {
-  a = lineSensors.calibratedMinimumOn[0] / 2000.0 * 100; // deler med 2000.0 som en float eller double - ikke int (heltal)
+  a = lineSensors.calibratedMinimumOn[0] / 2000.0 * 100;  // deler med 2000.0 som en float eller double - ikke int (heltal)
   b = lineSensors.calibratedMaximumOn[0] / 2000.0 * 100;
   c = lineSensors.calibratedMinimumOn[1] / 2000.0 * 100;
   d = lineSensors.calibratedMaximumOn[1] / 2000.0 * 100;
