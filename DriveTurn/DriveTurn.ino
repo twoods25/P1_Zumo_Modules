@@ -27,7 +27,7 @@ int16_t gyroOffset;
 // This variable helps us keep track of how much time has passed between readings of the gyro.
 uint16_t gyroLastUpdate = 0;
 
-const int v_max = 300;                // average forward speed (−400 to 400)
+const int v_max = 150;                // average forward speed (−400 to 400)
 const float Delta_max = 100;          // max speed difference between wheels
 const unsigned long turnTime = 1250;  // total turn duration in ms
 const float pi = 3.1415926;
@@ -130,12 +130,7 @@ void setup() {
 
 // Main loop: execute one 90° left turn and drive forward once
 void loop() {
-  DriveTurn(30, 1);  // perform 90° left turn (1 = left)
-  /*motors.setSpeeds(v_max, v_max); // straighten out and drive forward
-    delay(500);                    // drive straight for 1 second*/
-  DriveTurn(87, 1);        // perform 90° left turn (1 = left)
-  DriveTurn(87, 1);        // perform 90° left turn (1 = left)
-  DriveTurn(87, 1);        // perform 90° left turn (1 = left)
+  DriveTurn(90, 1);        // perform 90° left turn (1 = left)
   motors.setSpeeds(0, 0);  // stop motors
 
   while (1)
