@@ -7,7 +7,6 @@ Zumo32U4ButtonA buttonA;
 Zumo32U4OLED display;
 Zumo32U4Buzzer buzzer;
 
-
 void setup() {
   // Reset encoders
   encoders.getCountsAndResetLeft();
@@ -41,39 +40,36 @@ void setup() {
   display.clear();
   display.print(F("Driving..."));
 }
-void loop() {
+
+void StraightDrive() {
   static int lastLeft = 0;
   static int lastRight = 0;
 
-  // Get current encoder counts
   int leftNow = encoders.getCountsLeft();
   int rightNow = encoders.getCountsRight();
 
-  // Calculate how much each wheel has moved since last loop
   int leftDelta = leftNow - lastLeft;
   int rightDelta = rightNow - lastRight;
 
-  // Update previous counts
   lastLeft = leftNow;
   lastRight = rightNow;
 
-  // Calculate correction (difference between wheel speeds)
   int correction = leftDelta - rightDelta;
 
-  // Base speed
-  int baseSpeed = 400;  // Adjust as needed
+  int baseSpeed = 200; //int baseSpeed = desiredSpeed;
+  float kP = 1; // float kP = 60*(desiredSpeed/400);
 
-  // Apply proportional correction
-  float kP = 60;  // Proportional gain (tune this value)
   int leftSpeed = baseSpeed - correction * kP;
   int rightSpeed = baseSpeed + correction * kP;
 
-  // Constrain to safe limits
   leftSpeed = constrain(leftSpeed, 0, 400);
   rightSpeed = constrain(rightSpeed, 0, 400);
 
-  // Apply speeds
   motors.setSpeeds(leftSpeed, rightSpeed);
 
-  delay(5);
+  
+}
+
+void loop() {
+  StraightDrive();
 }
