@@ -105,9 +105,9 @@ void followDirection()
   else if ((lineSensorValues[Direction] > 1000) && (lineSensorValues[1] > 600) && (lineSensorValues[subDirection] < 1000))
   {
     if (Direction == 0)
-      motors.setSpeeds(speed, speed / 2);
+      motors.setSpeeds(speed, speed);
     else
-      motors.setSpeeds(speed / 2, speed);
+      motors.setSpeeds(speed, speed);
   }
 }
 
