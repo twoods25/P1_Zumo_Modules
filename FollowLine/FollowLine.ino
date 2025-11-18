@@ -14,6 +14,8 @@ unsigned short hvid = 500;
 
 unsigned char a, b, c, d, e, f;
 
+unsigned short rawValues[NUM_SENSORS];
+
 void forward() {
   motors.setSpeeds(speed, speed);  // kør med defineret hastighed
 }
@@ -48,6 +50,12 @@ void normalize() {
 }
 
 void printReadingsToSerial() {
+  readLineSensors();
+  for (int i = 0; i < NUM_SENSORS; i++) {
+    rawValues[i] = lineSensorValues[i];
+  }
+  unsigned short pos = lineSensors.readLine(lineSensorValues);
+  calibrateSensors();
   char buffer[120];                                                                                      // opretter tegn-array med plads til 80 tegn
   sprintf(buffer,                                                                                        // i stedet for Serial.print(), da sprintf() er pæn og i en streng
           "%4d %4d | %4d %4d | %4d %4d     %4d | %4d | %4d     %3d %3d | %3d %3d | %3d %3d     %4d \n",  // %d = udskriv et helt tal, 4 = mindst fire karakterer (da 2000 er max), \n = linjeskift
@@ -57,11 +65,11 @@ void printReadingsToSerial() {
           lineSensors.calibratedMaximumOn[1],
           lineSensors.calibratedMinimumOn[2],
           lineSensors.calibratedMaximumOn[2],
-          lineSensorValues[0],
-          lineSensorValues[1],
-          lineSensorValues[2],
+          rawValues[0],
+          rawValues[1],
+          rawValues[2],
           a, b, c, d, e, f,
-          lineSensors.readLine(lineSensorValues));
+          pos);
   Serial.print(buffer);
 }
 
