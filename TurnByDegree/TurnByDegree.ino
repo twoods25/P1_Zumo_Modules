@@ -25,7 +25,6 @@ int16_t turnRate;
 int16_t gyroOffset;
 // This variable helps us keep track of how much time has passed between readings of the gyro.
 uint16_t gyroLastUpdate = 0;
-
 // OptimalTurnSpeed for the gyro to be as precise as possible.
 int optimalTurnSpeed = 100;
 
@@ -36,13 +35,11 @@ void setup() {
   turnSensorReset();
   OLED.clear();
 }
-
 int32_t getTurnAngleInDegrees() {
   // 360 degrees corresponds to a full 32-bit rotation (2^32 units)
   // So 1 degree = 2^32 / 360 ≈ 11930465.78 units
   return ((int64_t)turnAngle * 360) / 4294967296;  // = 2^32
 }
-
 void TurnByDegree(int32_t userTurn) {
   int32_t startAngle = getTurnAngleInDegrees();
   int32_t currentAngle = startAngle;
@@ -91,7 +88,6 @@ void TurnByDegree(int32_t userTurn) {
   motors.setSpeeds(0, 0);
   delay(100);
 }
-
 void loop() {
   //To use this func copy all code -loop, when the gyro is done calibrating click button A, to start the program in the loop.
   //Turns Left
@@ -104,7 +100,6 @@ void loop() {
   while (1) {
   }
 }
-
 // Should be called in setup.
 void turnSensorSetup() {
   Wire.begin();
@@ -148,14 +143,12 @@ void turnSensorSetup() {
   }
   OLED.clear();
 }
-
 // This should be called to set the starting point for measuring
 // a turn.  After calling this, turnAngle will be 0.
 void turnSensorReset() {
   gyroLastUpdate = micros();
   turnAngle = 0;
 }
-
 // Read the gyro and update the angle.  This should be called as
 // frequently as possible while using the gyro to do turns.
 void turnSensorUpdate() {

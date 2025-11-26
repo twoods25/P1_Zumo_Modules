@@ -18,7 +18,7 @@ unsigned short C_ThreshHold = 600;   // Tærskelværdi for hvid midterste sensor
 unsigned short speed = 100; // sætter hastighed (unsigned short = 0 til 65535)
 
 // Her bruges struct af forskellige situationer for sensorene til at bestemme hvad robotten skal gøre.
-struct setBooleans
+  struct setBooleans
 {
   // Boolean værdier for forskellige situationer af sensorsignaler med en reprentativt navn. (Gør koden lettere at læse)
   bool S0Sort1Hvid2Hvid = ((lineSensorValues[Direction] > LR_ThreshHold) && (lineSensorValues[1] < C_ThreshHold) && (lineSensorValues[subDirection] < LR_ThreshHold));
