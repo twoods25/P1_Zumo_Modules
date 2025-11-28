@@ -4,6 +4,8 @@
 Zumo32U4OLED OLED;
 Zumo32U4IMU imu;
 Zumo32U4ButtonA buttonA;
+Zumo32U4ButtonB buttonB;
+Zumo32U4ButtonC buttonC;
 Zumo32U4Motors motors;
 
 // Gyro Things
@@ -27,68 +29,81 @@ int16_t gyroOffset;
 // This variable helps us keep track of how much time has passed between readings of the gyro.
 uint16_t gyroLastUpdate = 0;
 
-const int v_max = 300;                // average forward speed (−400 to 400)
-const float Delta_max = 100;          // max speed difference between wheels
-const unsigned long turnTime = 1250;  // total turn duration in ms
+const int v_max = 150;               // average forward speed (−400 to 400)
+const float Delta_max = 100;         // max speed difference between wheels
+const unsigned long turnTime = 1250; // total turn duration in ms
 const float pi = 3.1415926;
 
 // Returns the current turn angle in degrees based on 'turnAngle' fixed-point value
-int32_t getTurnAngleInDegrees() {
+int32_t getTurnAngleInDegrees()
+{
   return ((int32_t)turnAngle >> 16) * 360 >> 16;
-}  // converts 32-bit fixed-point to int degrees
+} // converts 32-bit fixed-point to int degrees
 // Calibrates an angle to the range [-180, 180] degrees
-int32_t calibrateTurnAng(int32_t Degree) {
-  if (Degree > 180) {
-    return Degree - 360;  // wrap angles > 180 to negative side
-  } else if (Degree < -180) {
-    return Degree + 360;  // wrap angles < -180 to positive side
-  } else {
-    return Degree;  // already in range
+int32_t calibrateTurnAng(int32_t Degree)
+{
+  if (Degree > 180)
+  {
+    return Degree - 360; // wrap angles > 180 to negative side
+  }
+  else if (Degree < -180)
+  {
+    return Degree + 360; // wrap angles < -180 to positive side
+  }
+  else
+  {
+    return Degree; // already in range
   }
 }
 // Converts a user-specified degree turn into an approximate duration in ms
-unsigned long secondsToDegree(int32_t UserDegreeTurn1) {
+unsigned long secondsToDegree(int32_t UserDegreeTurn1)
+{
   return (unsigned long)(turnTime * (float)UserDegreeTurn1 / 90.0);
   // Assumes 'turnTime' is the time (ms) for a 90° turn; scales linearly
 }
 
 // Returns true if the robot still needs to turn, false if the target angle is reached
-bool TurnByDegree(int32_t UserDegreeTurn2, int userDirection, bool runOnce) {
-  static int32_t currentAngle;         // persists across multiple calls
-  static int32_t RightCalibratedTurn;  // right-turn target angle
-  static int32_t LeftCalibratedTurn;   // left-turn target angle
+bool TurnByDegree(int32_t UserDegreeTurn2, int userDirection, bool runOnce)
+{
+  static int32_t currentAngle;        // persists across multiple calls
+  static int32_t RightCalibratedTurn; // right-turn target angle
+  static int32_t LeftCalibratedTurn;  // left-turn target angle
 
-  if (runOnce)  { // initialize targets only once
-    currentAngle = getTurnAngleInDegrees();                                  // read initial heading
-    RightCalibratedTurn = calibrateTurnAng(currentAngle - UserDegreeTurn2);  // right target
-    LeftCalibratedTurn = calibrateTurnAng(currentAngle + UserDegreeTurn2);   // left target
+  if (runOnce)
+  {                                                                         // initialize targets only once
+    currentAngle = getTurnAngleInDegrees();                                 // read initial heading
+    RightCalibratedTurn = calibrateTurnAng(currentAngle - UserDegreeTurn2); // right target
+    LeftCalibratedTurn = calibrateTurnAng(currentAngle + UserDegreeTurn2);  // left target
   }
 
-  turnSensorUpdate();                      // read latest gyro values
-  currentAngle = getTurnAngleInDegrees();  // store current heading
+  turnSensorUpdate();                     // read latest gyro values
+  currentAngle = getTurnAngleInDegrees(); // store current heading
 
-  Serial.println("Degree: " + String(currentAngle));  // debug output
-  OLED.clear();                                       // optional display refresh
+  Serial.println("Degree: " + String(currentAngle)); // debug output
+  OLED.clear();                                      // optional display refresh
 
   // check if robot still needs to turn
-  switch (userDirection) {
-    case 0:
-      return currentAngle > RightCalibratedTurn;  // right turn not complete?
-    case 1:
-      return currentAngle < LeftCalibratedTurn;  // left turn not complete?
-    default:
-      return false;  // invalid direction
+  switch (userDirection)
+  {
+  case 0:
+    return currentAngle > RightCalibratedTurn; // right turn not complete?
+  case 1:
+    return currentAngle < LeftCalibratedTurn; // left turn not complete?
+  default:
+    return false; // invalid direction
   }
 }
 
 // Drive the robot through a smooth turn with sine-speed profile and gyro-based stopping
-void DriveTurn(int32_t userDegreeTurn3, int userDirection) {
-  unsigned long startTime = millis();  // record start time of turn
-  unsigned long t = 0;                 // elapsed time
-  bool angleBreakpointReached = true;  // has robot reached target angle?
-  bool runOnce = true;                 // flag to initialize TurnByDegree once
+void DriveTurn(int32_t userDegreeTurn3, int userDirection)
+{
+  unsigned long startTime = millis(); // record start time of turn
+  unsigned long t = 0;                // elapsed time
+  bool angleBreakpointReached = true; // has robot reached target angle?
+  bool runOnce = true;                // flag to initialize TurnByDegree once
 
-  while (t <= secondsToDegree(userDegreeTurn3) && angleBreakpointReached) {
+  while (t <= secondsToDegree(userDegreeTurn3) && angleBreakpointReached)
+  {
     // ---------------- SINE-SPEED PROFILE ----------------
     // Compute the progress of the turn (0.0 → 1.0) based on elapsed time
     float progress = (float)t / (float)secondsToDegree(userDegreeTurn3);
@@ -99,51 +114,63 @@ void DriveTurn(int32_t userDegreeTurn3, int userDirection) {
     // - At progress=1, sin(pi)=0 → offset returns to 0 → smooth deceleration near target
     float delta = Delta_max * sin(pi * progress);
 
-    int vL = v_max - delta;  // left motor slows for left turn, speeds up for right turn
-    int vR = v_max + delta;  // right motor speeds up for left turn, slows for right turn
+    int vL = v_max - delta; // left motor slows for left turn, speeds up for right turn
+    int vR = v_max + delta; // right motor speeds up for left turn, slows for right turn
 
-    motors.setSpeeds(vL, vR);  // apply smooth motor speeds
+    motors.setSpeeds(vL, vR); // apply smooth motor speeds
 
-    delay(50);                 // control loop interval ~50 Hz
-    t = millis() - startTime;  // update elapsed time
+    delay(50);                // control loop interval ~50 Hz
+    t = millis() - startTime; // update elapsed time
 
     // ---------------- GYRO-BASED STOPPING ----------------
     // Check current heading using TurnByDegree
     // - This ensures that even if the sine profile would "overshoot",
     //   the robot stops precisely when the gyro target angle is reached
     angleBreakpointReached = TurnByDegree(userDegreeTurn3, userDirection, runOnce);
-    runOnce = false;  // targets initialized only on first call
+    runOnce = false; // targets initialized only on first call
   }
-  motors.setSpeeds(0, 0);  // stop motors precisely at the target angle
+  motors.setSpeeds(0, 0); // stop motors precisely at the target angle
 }
 
 // Arduino setup: initialize Serial, sensors, motors, display
-void setup() {
+void setup()
+{
   Serial.begin(9600);
-  turnSensorSetup();  // configure gyro / IMU
+  turnSensorSetup(); // configure gyro / IMU
   delay(500);
-  turnSensorReset();       // reset gyro heading to 0
-  OLED.clear();            // clear display
-  motors.setSpeeds(0, 0);  // ensure motors stopped
+  turnSensorReset();      // reset gyro heading to 0
+  OLED.clear();           // clear display
+  motors.setSpeeds(0, 0); // ensure motors stopped
   delay(1000);
+  buttonA.waitForButton();
 }
 
 // Main loop: execute one 90° left turn and drive forward once
-void loop() {
-  DriveTurn(30, 1);  // perform 90° left turn (1 = left)
-  /*motors.setSpeeds(v_max, v_max); // straighten out and drive forward
-    delay(500);                    // drive straight for 1 second*/
-  DriveTurn(87, 1);        // perform 90° left turn (1 = left)
-  DriveTurn(87, 1);        // perform 90° left turn (1 = left)
-  DriveTurn(87, 1);        // perform 90° left turn (1 = left)
-  motors.setSpeeds(0, 0);  // stop motors
-
-  while (1)
-    ;  // infinite loop to end program
+void loop()
+{
+  if (buttonA.isPressed())
+  {
+    buttonA.waitForButton();
+    DriveTurn(90, 1);       // perform 90° left turn (1 = left)
+    motors.setSpeeds(0, 0); // stop motors
+  }
+  else if (buttonB.isPressed())
+  {
+    buttonB.waitForButton();
+    DriveTurn(120, 1); // perform 90° left turn (1 = left)
+    motors.setSpeeds(0, 0); // stop motors
+  }
+  else if (buttonC.isPressed())
+  {
+    buttonC.waitForButton();
+    DriveTurn(180, 1); // perform 90° left turn (1 = left)
+    motors.setSpeeds(0, 0); // stop motors
+  }
 }
 
 // Should be called in setup.
-void turnSensorSetup() {
+void turnSensorSetup()
+{
   Wire.begin();
   imu.init();
   imu.enableDefault();
@@ -160,9 +187,11 @@ void turnSensorSetup() {
 
   // Calibrate the gyro.
   int32_t total = 0;
-  for (uint16_t i = 0; i < 1024; i++) {
+  for (uint16_t i = 0; i < 1024; i++)
+  {
     // Wait for new data to be available, then read it.
-    while (!imu.gyroDataReady()) {
+    while (!imu.gyroDataReady())
+    {
     }
     imu.readGyro();
 
@@ -176,7 +205,8 @@ void turnSensorSetup() {
   // user presses A.
   OLED.clear();
   turnSensorReset();
-  while (!buttonA.getSingleDebouncedRelease()) {
+  while (!buttonA.getSingleDebouncedRelease())
+  {
     turnSensorUpdate();
     OLED.gotoXY(0, 0);
     // do some math and pointer magic to turn angle in seconds to angle in degrees
@@ -188,14 +218,16 @@ void turnSensorSetup() {
 
 // This should be called to set the starting point for measuring
 // a turn.  After calling this, turnAngle will be 0.
-void turnSensorReset() {
+void turnSensorReset()
+{
   gyroLastUpdate = micros();
   turnAngle = 0;
 }
 
 // Read the gyro and update the angle.  This should be called as
 // frequently as possible while using the gyro to do turns.
-void turnSensorUpdate() {
+void turnSensorUpdate()
+{
   // Read the measurements from the gyro.
   imu.readGyro();
   turnRate = imu.g.z - gyroOffset;
