@@ -11,9 +11,23 @@ Zumo32U4Motors motors;
 Zumo32U4ProximitySensors prox;
 
 int x = 0;
+int number = 1;
 
-//------------------------------------------- code from TurnByDegree()_Old 29 okt. 2025 ------------------------------------------- 
-//------------------------------------------- ------------------------------------------- ------------------------------------------- 
+//------------------------------------------- code from TurnByDegree()_Old 1.dec . 2025 -------------------------------------------
+//------------------------------------------- ------------------------------------------- -------------------------------------------
+
+/* turnAngle is a 32-bit unsigned integer representing the amount
+the robot has turned since the last time turnSensorReset was
+called.  This is computed solely using the Z axis of the gyro, so
+it could be inaccurate if the robot is rotated about the X or Y
+axes.
+
+Our convention is that a value of 0x20000000 represents a 45
+degree counter-clockwise rotation.  This means that a uint32_t
+can represent any angle between 0 degrees and 360 degrees.  If
+you cast it to a signed 32-bit integer by writing
+(int32_t)turnAngle, that integer can represent any angle between
+-180 degrees and 180 degrees. */
 uint32_t turnAngle = 0;
 // turnRate is the current angular rate of the gyro, in units of 0.07 degrees per second.
 int16_t turnRate;
@@ -24,73 +38,63 @@ uint16_t gyroLastUpdate = 0;
 // OptimalTurnSpeed for the gyro to be as precise as possible.
 int optimalTurnSpeed = 100;
 
-int32_t getTurnAngleInDegrees(){
-  return ((int32_t)turnAngle >> 16) * 360 >> 16;}
 
-int32_t calibrateTurnAng(int32_t Degree){
-  //Handles logic if angle becomes greater than 180 or less than -180.
-  if (Degree > 180)
-  {
-    return Degree - 360;
-  }
-  else if (Degree < -180)
-  {
-    return Degree + 360;
-  }
-  else
-  {
-    return Degree;
-  }}
+int32_t getTurnAngleInDegrees() {
+  // 360 degrees corresponds to a full 32-bit rotation (2^32 units)
+  // So 1 degree = 2^32 / 360 ≈ 11930465.78 units
+  return ((int64_t)turnAngle * 360) / 4294967296;  // = 2^32
+}
+void TurnByDegree(int32_t userTurn) {
+  int32_t startAngle = getTurnAngleInDegrees();
+  int32_t currentAngle = startAngle;
+  int32_t delta = 0;
 
-void TurnByDegree(int32_t UserDegreeTurn, int userDirection){
-  // Saves the current turn angle in degrees
-  int32_t currentAngle = getTurnAngleInDegrees();
-  // Calculates the calibrated turn angle, by taking the current angle and adding/subtracting the user input angle
-  int32_t RightCalibratedTurn = calibrateTurnAng(currentAngle - UserDegreeTurn); // Need to handle a -270 degree turn case ----------------------------------
-  int32_t LeftCalibratedTurn = calibrateTurnAng(currentAngle + UserDegreeTurn);
+  int leftSpeed, rightSpeed;
 
-  // A switch to choose between right and left turn on 1 or 0 input.
-  switch (userDirection)
-  {
-  case 0: // Right turn //While the current turn angle is greater than the calibrated turn angle, keep turning right
-    while (currentAngle > RightCalibratedTurn)
-    {
-      // Updates the turn angle, by reading the gyro
-      turnSensorUpdate();
-      // saves the updated turn angle in degrees
-      currentAngle = getTurnAngleInDegrees();
-      // Sets the motors to turn right
-      motors.setSpeeds(optimalTurnSpeed, -optimalTurnSpeed);
-
-      // Visual
-      Serial.println("Degree: " + (String)currentAngle);
-      OLED.clear();
-    }
-    // Stops the motors after the turn is complete.
+  // figure out which way to spin
+  if (userTurn > 0) {  // turn right (CW)
+    leftSpeed = optimalTurnSpeed;
+    rightSpeed = -optimalTurnSpeed;
+  } else if (userTurn < 0) {  // turn left (CCW)
+    leftSpeed = -optimalTurnSpeed;
+    rightSpeed = optimalTurnSpeed;
+  } else {
     motors.setSpeeds(0, 0);
-    break;
-  case 1: // Left turn //While the current turn angle is less than the calibrated turn angle, keep turning left
-    while (currentAngle < LeftCalibratedTurn)
-    {
-      // Updates the turn angle, by reading the gyro
-      turnSensorUpdate();
-      // saves the updated turn angle in degrees
-      currentAngle = getTurnAngleInDegrees();
-      // Sets the motors to turn left
-      motors.setSpeeds(-optimalTurnSpeed, optimalTurnSpeed);
+    return;
+  }
+  motors.setSpeeds(leftSpeed, rightSpeed);
+  unsigned long lastUpdate = millis();
 
-      // Visual
-      Serial.println("Degree: " + (String)currentAngle);
-      OLED.clear();
+  while (true) {
+    turnSensorUpdate();
+    currentAngle = getTurnAngleInDegrees();
+    delta = currentAngle - startAngle;
+
+    // keep angle in range [-180, 180]
+    if (delta > 180) delta -= 360;
+    if (delta < -180) delta += 360;
+
+    // stop once we hit or pass target
+    if ((userTurn > 0 && delta >= userTurn) || (userTurn < 0 && delta <= userTurn)) {
+      break;
     }
-    // Stops the motors after the turn is complete.
-    motors.setSpeeds(0, 0);
-    break;
-  default:
-    break;
-  }}
-// Should be called in setup. //The following 3 funcs are Gyro func.
-void turnSensorSetup(){
+
+    // print every ~100ms for debug // I had to insert a way to watch how the robot is rotating.
+    if (millis() - lastUpdate > 100) {
+      Serial.print("Angle: ");
+      Serial.print(currentAngle);
+      Serial.print("  Δ=");
+      Serial.println(delta);
+      lastUpdate = millis();
+    }
+  }
+
+  motors.setSpeeds(0, 0);
+  delay(100);
+}
+
+// Should be called in setup.
+void turnSensorSetup() {
   Wire.begin();
   imu.init();
   imu.enableDefault();
@@ -107,11 +111,9 @@ void turnSensorSetup(){
 
   // Calibrate the gyro.
   int32_t total = 0;
-  for (uint16_t i = 0; i < 1024; i++)
-  {
+  for (uint16_t i = 0; i < 1024; i++) {
     // Wait for new data to be available, then read it.
-    while (!imu.gyroDataReady())
-    {
+    while (!imu.gyroDataReady()) {
     }
     imu.readGyro();
 
@@ -125,26 +127,27 @@ void turnSensorSetup(){
   // user presses A.
   OLED.clear();
   turnSensorReset();
-  while (!buttonA.getSingleDebouncedRelease())
-  {
+  while (!buttonA.getSingleDebouncedRelease()) {
     turnSensorUpdate();
     OLED.gotoXY(0, 0);
     // do some math and pointer magic to turn angle in seconds to angle in degrees
     OLED.print((((int32_t)turnAngle >> 16) * 360) >> 16);
     OLED.print(F("   "));
   }
-  OLED.clear();}
+  OLED.clear();
+}
 // This should be called to set the starting point for measuring
 // a turn.  After calling this, turnAngle will be 0.
-void turnSensorReset(){
+void turnSensorReset() {
   gyroLastUpdate = micros();
-  turnAngle = 0;}
+  turnAngle = 0;
+}
 // Read the gyro and update the angle.  This should be called as
 // frequently as possible while using the gyro to do turns.
-void turnSensorUpdate(){
+void turnSensorUpdate() {
   // Read the measurements from the gyro.
   imu.readGyro();
-  turnRate = imu.g.z - gyroOffset;
+  turnRate = -(imu.g.z - gyroOffset);
 
   // Figure out how much time has passed since the last update (dt)
   uint16_t m = micros();
@@ -164,8 +167,9 @@ void turnSensorUpdate(){
   //
   // (0.07 dps/digit) * (1/1000000 s/us) * (2^29/45 unit/degree)
   // = 14680064/17578125 unit/(digit*us)
-  turnAngle += (int64_t)d * 14680064 / 17578125;}
-//------------------------------------------- ------------------------------------------- ------------------------------------------- 
+  turnAngle += (int64_t)d * 14680064 / 17578125;
+}
+//------------------------------------------- ------------------------------------------- -------------------------------------------
 
 
 
@@ -181,66 +185,85 @@ void setup() {
 
 void loop() {
 
-  // "Moves the array into sensorValues and get it a address with the use of *"
-  int* sensorValues = SensorValue();
-  // now it is possibel to right  SensorValue[] and chose what sensor you are looking at.
-
 
   switch (x) {
     case 0:
       motors.setSpeeds(100, 100);
-      if (sensorValues[0] == 12) {
+      if (SensorValue() >= 10 ) {
         x = 1;
       }
       delay(200);
       break;
+
     case 1:
-      /*while (sensorValues[0] > 10) {
-        motors.setSpeeds(0, 100);
-        int* sensorValues = SensorValue();
-      }*/
-      TurnByDegree(45, 1); // 45 degrees left
+      motors.setSpeeds(0, 0);
+      TurnByDegree(-45);
       x = 2;
       break;
 
     case 2:
-      /*while (sensorValues[2] < 8) {
+      delay(500);
+      if (SensorValue() <= 10) {
         motors.setSpeeds(100, 100);
-        int* sensorValues = SensorValue();
-      }*/
-      motors.setSpeeds(100, 100);
-      delay(700);
-      x = 3;
-      break;
+        delay(2000);
+        motors.setSpeeds(0, 0);
+        x = 3;
+        break;
+      } else {
+        x = 1;
+        number = 2;
+        break;
+      }
 
     case 3:
-      TurnByDegree(45, 0); // 45 degrees right
-      x = 4;
-      break;
-    case 4:
-      /*while (sensorValues[2] < 7) {
+      TurnByDegree((45*number));
+      delay(500);
+      // int* sensorValues = SensorValue();
+
+      if (SensorValue() <= 10) {  // hvis der ikke er noget foran den, må der være fri bane
         motors.setSpeeds(100, 100);
-        int* sensorValues = SensorValue();
-      }*/
-      motors.setSpeeds(100, 100);
-      delay(700);
-      x = 5;
-      break;
+        delay(2000);  // her skal der regnes ud hvor lang tid den skal kører, udfra hvor langt den stopper væk fra det på linjen.
+        motors.setSpeeds(0, 0);
+        x = 4;
+        break;
+      } else {  //hvis der stadig ikke er fri, skal den kører endnu længere ud
+        TurnByDegree(-90);
+        motors.setSpeeds(100, 100);
+        number = 2;
+        delay(1000);
+        motors.setSpeeds(0, 0);
+        break;
+      }
+      
+    case 4:
+    Serial.print("I am here");
+      TurnByDegree(90);
+      delay(500);
+      
+      if (SensorValue() <= 10) {
+        motors.setSpeeds(100, 100);
+        delay(2000);              // her skal den stoppe når den møder stregen igen
+        motors.setSpeeds(0, 0);
+        x = 5;
+        break;
+      } else {
+        TurnByDegree(-90);
+        motors.setSpeeds(100, 100);
+        delay(1500);
+        motors.setSpeeds(0, 0);
+        break;
+      } 
     case 5:
-      TurnByDegree(45, 0); // 45 degrees right
-      x = 6;
-      break;
-    case 6:
-      motors.setSpeeds(100, 100);
-      delay(1000);
-      break;
+    x = 6;
+    break;
+
   }
 
 
   oled.clear();
-  oled.print(sensorValues[0]);
-  oled.gotoXY(0, 1);
-  oled.print(sensorValues[2]);
+
+  OLED.gotoXY(0, 1);
+  OLED.print(x);
 
   delay(100);
 }
@@ -257,8 +280,8 @@ int* SensorValue() {
   //Side
   values[1] = prox.countsLeftWithLeftLeds() + prox.countsLeftWithRightLeds();
   values[2] = prox.countsRightWithLeftLeds() + prox.countsRightWithRightLeds();
-  
-  
 
-  return values;
+  int front = values[1];
+
+  return front;
 }
