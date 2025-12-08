@@ -10,16 +10,35 @@ Zumo32U4ButtonB buttonB;
 Zumo32U4Motors motors;
 Zumo32U4LineSensors lineSensors;
 
+// ------------------------------------ Array initialization variables ------------------------------------
+// vars to count the accumulated counts of the encoders
+int movementCommand = 0;    // used to select the command
+int movementParameter = 0;  // used to select distance or angle
+
+bool startup_start_con = true;
+int const countJump = 100;     // number of counts before jumping to next command in stage 0
+int const maxCorridor = 1000;  // max distance the robot should travel
+int const maxRoom = 10;        // max angle the robot can turn
+float wheelCirc = 13.0;
+int routeIndex = 0;
+// control the flow of the program. 0 wait for command
+//                                  1 wait for speed and time
+//                                  2 running the command.
+int stage = 0;
+// control selection 1              0 Forward
+//                                  1 Backwards
+//                                  2 turn
+int chosenCommand = 0;
+// ------------------------------------ Array initialization variables ------------------------------------
+
 // OptimalTurnSpeed for the gyro to be as precise as possible.
 int optimalTurnSpeed = 100;
-
 // Array initialization.
 const int sizeA = 3;
 const int sizeB = 2;
 int commandArray[sizeA][sizeB];  // Array holds five entries of [Command, parameter]
 int corridorCount = 0;
 int hospitalState = 0;  // 0 = searching for corridors, 1 = turning to room, 2 = going out from room, 4 = driving back on "highway". and many more states.
-
 /* -------------------- Gyro Things --------------------
 TurnAngle is a 32-bit unsigned integer representing the amount
 the robot has turned since the last time turnSensorReset was
@@ -54,6 +73,56 @@ const float pi = 3.1415926;
 unsigned short lineSensorValues[NUM_SENSORS];  // gemmer målingerne i en array
 unsigned char speed = 100;                     // sætter hastighed (unsigned short = 0 til 65535)
 unsigned short hvid = 500;                     // tærskelværdi for hvid (høj værdi = hvid overflade, lav værdi = sort overflade)
+
+void setup() {
+  Serial.begin(9600);
+  startup();
+  delay(2000);
+  turnSensorSetup();  // configure gyro / IMU
+  delay(500);
+  turnSensorReset();       // reset gyro heading to 0
+  OLED.clear();            // clear display
+  motors.setSpeeds(0, 0);  // ensure motors stopped
+  delay(1000);
+  lineSensors.initThreeSensors();  // initialiserer de tre sensorer
+
+  // Initialize commandArray with some example values
+  //commandArray[0][0] = 100;  // Example: Turn after 3 corridors
+  //commandArray[0][1] = 3;    // Example: Turn to room number 2
+
+  printOLED("LineCal","MOVE");
+  delay(400);
+  unsigned long timeStartUp = millis();
+  // FollowLine_P setup for sensor calibration
+  while (!buttonA.getSingleDebouncedPress()) {
+    lineSensors.calibrate();
+    // gemmer min- og max-værdier for hver sensor fra arrayet [NUM_SENSORS] i
+    // lineSensors.calibratedMinimum[NUM_SENSORS] og lineSensors.calibratedMaximum[NUM_SENSORS]
+    if (millis() - timeStartUp > 5000) {
+      printOLED("DONE?","PRESS A");
+    }
+  }
+  lineSensors.readCalibrated(lineSensorValues);
+  // omregner min- og max-værdierne, således at de henholdsvis bliver 0 og 2000
+}
+
+void loop() {
+  //AvoidObstacles();
+  Corridor_Turn();
+  followLine();
+
+  /*lineSensors.read(lineSensorValues, QTR_EMITTERS_ON); // læser sensorerne og gemmer værdierne i arrayet [NUM_SENSORS]
+      Serial.println("Line Sensor Values: ");
+      Serial.print(lineSensorValues[0]);
+      Serial.print(", ");
+      Serial.print(lineSensorValues[1]);
+      Serial.print(", ");
+      Serial.println(lineSensorValues[2]);
+      delay(1500);
+      // Debugging line sensor values*/
+}
+
+
 void followLine() {
   short position = lineSensors.readLine(lineSensorValues);
   // gør internt lineSensors.read(lineSensorValues, QTR_EMITTERS_ON);
@@ -70,47 +139,6 @@ void followLine() {
   int rightMotorSpeed = constrain(speed - Up, 0, 100);
   motors.setSpeeds(leftMotorSpeed, rightMotorSpeed);
 }
-
-void setup() {
-  Serial.begin(9600);
-  turnSensorSetup();  // configure gyro / IMU
-  delay(500);
-  turnSensorReset();       // reset gyro heading to 0
-  OLED.clear();            // clear display
-  motors.setSpeeds(0, 0);  // ensure motors stopped
-  delay(1000);
-  lineSensors.initThreeSensors();  // initialiserer de tre sensorer
-
-  // Initialize commandArray with some example values
-  commandArray[0][0] = 100;  // Example: Turn after 3 corridors
-  commandArray[0][1] = 2;    // Example: Turn to room number 2
-
-  // FollowLine_P setup for sensor calibration
-  while (!buttonA.getSingleDebouncedPress()) {
-    lineSensors.calibrate();
-    // gemmer min- og max-værdier for hver sensor fra arrayet [NUM_SENSORS] i
-    // lineSensors.calibratedMinimum[NUM_SENSORS] og lineSensors.calibratedMaximum[NUM_SENSORS]
-  }
-  lineSensors.readCalibrated(lineSensorValues);
-  // omregner min- og max-værdierne, således at de henholdsvis bliver 0 og 2000
-}
-
-void loop() {
-  // AvoidObstacles();
-  Corridor_Turn();
-  followLine();
-
-  /*lineSensors.read(lineSensorValues, QTR_EMITTERS_ON); // læser sensorerne og gemmer værdierne i arrayet [NUM_SENSORS]
-      Serial.println("Line Sensor Values: ");
-      Serial.print(lineSensorValues[0]);
-      Serial.print(", ");
-      Serial.print(lineSensorValues[1]);
-      Serial.print(", ");
-      Serial.println(lineSensorValues[2]);
-      delay(1500);*/
-  // Debugging line sensor values
-}
-
 /*//A solution for delay problem could be to use millis() to create a non-blocking delay.
 static unsigned long lastCorridorUpdate = 0;
 if (millis() - lastCorridorUpdate > 300) {  // 300ms between corridor detections
@@ -132,9 +160,13 @@ void Corridor_Turn()  // !!!!!!!!!!!!!IMPORTANT  I NEED SOME KIND OF DELAY HERE 
         corridorCount++;
         // count corridors
         if (corridorCount == (commandArray[0][0] / 100)) {
+          printOLED("CORRIDOR", String(corridorCount*100));
           DriveTurn(90, 1);  // turn right 90 degrees (1 = left)
           corridorCount = 0;
           hospitalState = 1;  // change state to turning to room
+        } else {
+          printOLED("SKIPS", "ToNEXT");
+          delay(700);
         }
       }
       break;
@@ -144,6 +176,7 @@ void Corridor_Turn()  // !!!!!!!!!!!!!IMPORTANT  I NEED SOME KIND OF DELAY HERE 
         corridorCount += 2;
         // count corridors
         if ((corridorCount == commandArray[0][1]) || ((corridorCount - 1) == commandArray[0][1])) {
+          printOLED("ROOM", String(commandArray[0][1]));
           forward();
           delay(500);
           if ((commandArray[0][1] % 2) == 0) {
@@ -157,12 +190,15 @@ void Corridor_Turn()  // !!!!!!!!!!!!!IMPORTANT  I NEED SOME KIND OF DELAY HERE 
           }
           corridorCount = 0;
           hospitalState = 2;  // change state to turning to room
+        } else {
+          delay(700);
         }
       }
       break;
     case 2:
       // logic for going out from room
       if ((lineSensorValues[0] < 200) && (lineSensorValues[2] < 200) && (lineSensorValues[1] < 200)) {
+        printOLED("EXIT", "ROOM");
         TurnByDegree(90);   // turn around 180 degrees
         TurnByDegree(90);   // turn around 180 degrees
         hospitalState = 3;  // change state to driving back on "highway"
@@ -193,24 +229,22 @@ void Corridor_Turn()  // !!!!!!!!!!!!!IMPORTANT  I NEED SOME KIND OF DELAY HERE 
       if (lineSensorValues[1] < 200) {
         Serial.println("I was here!!!");
         if ((corridorCount == 3) || (corridorCount == 4)) {
+          printOLED("BACK", "HIGHWAY");
           DriveTurn(90, 1);  // turn left 90 degrees (1 = left)
           corridorCount = 0;
           hospitalState = 5;  // change state to searching for corridors
-        } 
-        else {
+        } else {
+          printOLED("SKIPS", "ToNEXT");
           // count corridors
           corridorCount += 2;
           forward();
-          delay(500);
+          delay(700);
         }
       }
       break;
     case 5:
-    while(1){
-        stop();
-    }
       // logic for going back to pickup point, (0,0)
-      hospitalState = 0;
+      hospitalState = 6;
       break;
     default:
       break;
@@ -237,7 +271,6 @@ unsigned long secondsToDegree(int32_t UserDegreeTurn1) {
   return (unsigned long)(turnTime * (float)UserDegreeTurn1 / 90.0);
   // Assumes 'turnTime' is the time (ms) for a 90° turn; scales linearly
 }
-
 void TurnByDegree(int32_t userTurn) {
   int32_t startAngle = getTurnAngleInDegrees();
   int32_t currentAngle = startAngle;
@@ -288,12 +321,10 @@ void TurnByDegree(int32_t userTurn) {
   motors.setSpeeds(0, 0);
   delay(100);
 }
-
 // Returns the current turn angle in degrees based on 'turnAngle' fixed-point value
 int32_t DriveTurnGetTurnAngleInDegrees() {
   return ((int32_t)turnAngle2 >> 16) * 360 >> 16;
 }  // converts 32-bit fixed-point to int degrees
-
 // Drive the robot through a smooth turn with sine-speed profile and gyro-based stopping
 void DriveTurn(int32_t userDegreeTurn3, int userDirection) {
   unsigned long startTime = millis();  // record start time of turn
@@ -401,14 +432,12 @@ void turnSensorSetup() {
   }
   OLED.clear();
 }
-
 // This should be called to set the starting point for measuring
 // a turn.  After calling this, turnAngle will be 0.
 void turnSensorReset() {
   gyroLastUpdate = micros();
   turnAngle = 0;
 }
-
 // Read the gyro and update the angle.  This should be called as
 // frequently as possible while using the gyro to do turns.
 void turnSensorUpdate() {
@@ -453,4 +482,200 @@ void turnRight() {
 }
 void stop() {
   motors.setSpeeds(0, 0);  // stop
+}
+// The startup sequence
+bool startup() {
+  while (startup_start_con) {
+    delay(50);
+    switch (stage) {
+      case 0:
+        selectMovement();
+        break;
+      case 1:
+        ProgramSelection();
+        break;
+      /*case 2:
+            ParameterSelection();
+            break;*/
+      case 3:
+        ExecuteProgram();
+        break;
+    }
+  }
+}
+void ProgramSelection() {
+  switch (chosenCommand) {
+    case 0:
+      ResetRoute();
+      break;
+    case 1:
+      AddNewRoute();
+      break;
+    case 2:
+      if (buttonB.isPressed()) {
+        bip();
+        stage = 3;
+        printOLED("PRESS", "B");
+      }
+      delay(50);
+      break;
+  }
+}
+void ResetRoute() {
+  if (buttonA.isPressed()) {
+    bip();
+    clearCommandArray();
+    printOLED("ROUTE", "CLEARED!");
+    // Reset states
+    movementCommand = 0;
+    movementParameter = 0;
+    resetEncoders();
+    buttonA.waitForRelease();
+    chosenCommand = 0;
+    stage = 0;
+    routeIndex = 0;
+  }
+}
+void clearCommandArray() {
+  for (int i = 0; i < sizeA; i++) {
+    for (int j = 0; j < sizeB; j++) {
+      commandArray[i][j] = 0;
+    }
+  }
+}
+void AddNewRoute() {
+  int corridor = 0;
+  int room = 0;
+  int route_stage = 0;  // 0 select corridor, 1 select room
+  while (route_stage == 0) {
+    printOLED("<Corridor", String(corridor));
+    readEncodersParameter();
+    if (movementParameter > countJump) {
+      bip();
+      movementParameter = 0;
+      corridor += 100;
+      if (corridor > maxCorridor)
+        corridor = maxCorridor;
+    } else if (movementParameter < -countJump) {
+      bip();
+      movementParameter = 0;
+      corridor -= 100;
+      if (corridor < 0)
+        corridor = 0;
+    }
+    // OLEDSelectParameter();
+    if (buttonA.isPressed()) {
+      bip();
+      commandArray[routeIndex][0] = corridor;
+      stage = 0;
+      route_stage = 1;
+      buttonA.waitForRelease();
+    }
+    delay(50);
+  }
+  while (route_stage == 1) {
+    printOLED("<Room ", String(room));
+    readEncodersParameter();
+    if (movementParameter > countJump) {
+      bip();
+      movementParameter = 0;
+      room += 1;
+      if (room > maxRoom)
+        room = maxRoom;
+    } else if (movementParameter < -countJump) {
+      bip();
+      movementParameter = 0;
+      room -= 1;
+      if (room < 0)
+        room = 0;
+    }
+    // OLEDSelectParameter();
+    if (buttonA.isPressed()) {
+      bip();
+      commandArray[routeIndex][1] = room;
+      routeIndex++;
+      stage = 0;
+      route_stage = 0;
+      buttonA.waitForRelease();
+    }
+    delay(50);
+  }
+}
+void selectMovement() {
+  readEncodersMovement();
+  if (movementCommand > countJump) {
+    bip();
+    movementCommand = 0;
+    chosenCommand++;
+    if (chosenCommand > 3)
+      chosenCommand = 0;
+  } else if (movementCommand < -countJump) {
+    bip();
+    movementCommand = 0;
+    chosenCommand--;
+    if (chosenCommand < 0)
+      chosenCommand = 3;
+  }
+  OLEDSelectMovement();
+  if (buttonA.isPressed()) {
+    bip();
+    stage = 1;
+    buttonA.waitForRelease();  // wait till the button is released
+  }
+}
+void OLEDSelectMovement() {
+  switch (chosenCommand) {
+    case 0:
+      printOLED("Option>", "RESET");
+      break;
+    case 1:
+      printOLED("Option>", "NEWPATH");
+      break;
+    case 2:
+      printOLED("Option>", "EXECUTE");
+      break;
+    case 3:
+      printOLED("PATHS: >", String(routeIndex));
+      break;
+  }
+}
+void ExecuteProgram() {
+  printOLED("EXECUTING", "PATH");
+  delay(1000);
+  printOLED("GYRO", "START");
+  delay(2000);
+  // Reset states
+  movementCommand = 0;
+  movementParameter = 0;
+  resetEncoders();
+  chosenCommand = 0;
+  stage = 0;
+  routeIndex = 0;
+
+  // Terminating the startup loop
+  startup_start_con = false;
+}
+// Sound functions
+void bip() {
+  buzzer.playNote(NOTE_A(4), 20, 15);
+  delay(30);
+}
+// Easy fucntion to print in the OLED
+void printOLED(String s0, String s1) {
+  OLED.clear();
+  OLED.print(s0);
+  OLED.gotoXY(0, 1);
+  OLED.print(s1);
+}
+void resetEncoders() {
+  encoders.getCountsAndResetLeft();
+  encoders.getCountsAndResetRight();
+}
+void readEncodersMovement() {
+  movementCommand = movementCommand + encoders.getCountsRight();
+  resetEncoders();
+}
+void readEncodersParameter() {
+  movementParameter = movementParameter + encoders.getCountsLeft();
+  resetEncoders();
 }
