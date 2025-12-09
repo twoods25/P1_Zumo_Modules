@@ -281,7 +281,7 @@ int* SensorValue() {
   values[1] = prox.countsLeftWithLeftLeds() + prox.countsLeftWithRightLeds();
   values[2] = prox.countsRightWithLeftLeds() + prox.countsRightWithRightLeds();
 
-  int front = values[1];
+  int front = values[0];
 
   return front;
 }
