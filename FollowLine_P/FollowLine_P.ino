@@ -51,6 +51,7 @@ void printSlow() {
     lastPrintTime = now; // update the last print time to the current time
     Serial.print("Position: ");
     Serial.println(lineSensors.readLine(lineSensorValues) - 1000);
+  }
 }
 
 void FollowLine() {
@@ -64,8 +65,8 @@ void FollowLine() {
   }
   float Kp = 0.3;
   float Up = Kp * error; // Up fortæller, hvor meget Zumoen skal dreje i forhold til dens nuværende hastighed (styresignalet)
-  int leftMotorSpeed  = constrain(speed - Up, 0, 100);
-  int rightMotorSpeed = constrain(speed + Up, 0, 100);
+  float leftMotorSpeed  = speed - Up;
+  float rightMotorSpeed = speed + Up;
   motors.setSpeeds(leftMotorSpeed, rightMotorSpeed);
 }
 
@@ -80,7 +81,7 @@ void setup() {
     printFast();
   }
   lineSensors.readCalibrated(lineSensorValues);
-  // omregner min- og max-værdierne, således at de henholdsvis bliver 0 og 2000
+  // omregner min- og max-værdierne og kalibrerer, således at de henholdsvis bliver 0 og 1000
 }
 
 void loop() {
