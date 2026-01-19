@@ -22,8 +22,8 @@ int movementParameter = 0; // used to select distance or angle
 
 bool startup_start_con = true;
 int const countJump = 100;    // number of counts before jumping to next command in stage 0
-int const maxCorridor = 1000; // max distance the robot should travel
-int const maxRoom = 10;       // max angle the robot can turn
+int const maxCorridor = 200; // max distance the robot should travel
+int const maxRoom = 4;       // max angle the robot can turn
 float wheelCirc = 13.0;
 int routeIndex = 0;
 // control the flow of the program. 0 wait for command
@@ -33,7 +33,7 @@ int stage = 0;
 // control selection 1              0 Forward
 //                                  1 Backwards
 //                                  2 turn
-int chosenCommand = 0;
+int chosenCommand = 1;
 // ------------------------------------ Array initialization variables ------------------------------------
 
 // OptimalTurnSpeed for the gyro to be as precise as possible.
@@ -90,7 +90,7 @@ void setup()
 
 void loop()
 {
-  // AvoidObstacles();
+  AvoidObstacles();
   Corridor_Turn();
   followLine();
 }
@@ -104,20 +104,34 @@ void gyroSetupIntruction()
 }
 void lineSensorSetupIntruction()
 {
+
   lineSensors.initThreeSensors(); // initialiserer de tre sensorer
   prox.initThreeSensors();
   delay(500);
-  printOLED("LineCal", "MOVE");
-  delay(400);
   unsigned long timeStartUp = millis();
+  // instructions for calibrating the line sensors
+  OLED.clear();
+  OLED.gotoXY(0, 0);
+  OLED.setLayout11x4();
+  OLED.scrollDisplayUp();
+  OLED.print(" Move Zumo");
+  OLED.gotoXY(0, 1);
+  OLED.print("Dark=>Light");
+  OLED.gotoXY(0, 2);
+  OLED.print("to calibrate");
+  OLED.gotoXY(0, 3);
+  OLED.print("   line");
+  delay(500);
   // FollowLine_P setup for sensor calibration
   while (!buttonA.getSingleDebouncedPress())
   {
-    lineSensors.calibrate();
     // gemmer min- og max-værdier for hver sensor fra arrayet [NUM_SENSORS] i
     // lineSensors.calibratedMinimum[NUM_SENSORS] og lineSensors.calibratedMaximum[NUM_SENSORS]
-    if (millis() - timeStartUp > 5000)
+    lineSensors.calibrate();
+    
+    if (millis() - timeStartUp > 10000)
     {
+      OLED.setLayout8x2();
       printOLED("DONE?", "PRESS A");
     }
   }
@@ -279,32 +293,39 @@ void Corridor_Turn() // !!!!!!!!!!!!!IMPORTANT  I NEED SOME KIND OF DELAY HERE O
     {
       printOLED("PICKUP", "REACHED");
       forward();
-      delay(700);
+      corridorCount = 0;
       if (RunRoute == stopCon)
       {
         hospitalState = 6; // Restart program
+        stop();
       }
-      hospitalState = 0;
-      RunRoute++;
+      else
+      {
+        RunRoute++;
+        hospitalState = 0;
+        delay(700);
+      }
     }
     break;
   case 6:
     hospitalState = 0;
     RunRoute = 0;
-    while (1)
-    {
-      stop();
-    }
+    startup_start_con = true;
     unsigned long startTime = millis();
     while (millis() - startTime < 3000)
     {
+      stop();
       printOLED("PROGRAM", "ENDED");
       delay(700);
       printOLED("RESTART", "IN 3s");
     }
     printOLED("RESTART", "PROGRAM");
     delay(2000);
-    setup();
+    // Setup() function restart
+    startup();
+    gyroSetupIntruction(); // setup gyro / IMU
+    printOLED("READ", "LINE");
+    lineSensorSetupIntruction(); // setup line sensors and calibrate
     break;
   default:
     break;
@@ -406,6 +427,7 @@ int32_t DriveTurnGetTurnAngleInDegrees()
 // Drive the robot through a smooth turn with sine-speed profile and gyro-based stopping
 void DriveTurn(int32_t userDegreeTurn3, int userDirection)
 {
+  turnSensorReset();
   unsigned long startTime = millis(); // record start time of turn
   unsigned long t = 0;                // elapsed time
   bool angleBreakpointReached = true; // has robot reached target angle?
@@ -515,7 +537,9 @@ void turnSensorSetup()
     OLED.gotoXY(0, 0);
     // do some math and pointer magic to turn angle in seconds to angle in degrees
     OLED.print((((int32_t)turnAngle >> 16) * 360) >> 16);
-    OLED.print(F("   "));
+    OLED.println(F("   "));
+    OLED.gotoXY(0, 1);
+    OLED.println(F("PRESS A"));
   }
   OLED.clear();
 }
@@ -525,6 +549,7 @@ void turnSensorReset()
 {
   gyroLastUpdate = micros();
   turnAngle = 0;
+  turnAngle2 = 0;
 }
 // Read the gyro and update the angle.  This should be called as
 // frequently as possible while using the gyro to do turns.
@@ -592,8 +617,8 @@ bool startup()
       ProgramSelection();
       break;
     /*case 2:
-          ParameterSelection();
-          break;*/
+      ParameterSelection();
+      break;*/
     case 3:
       ExecuteProgram();
       break;
@@ -615,28 +640,29 @@ void ProgramSelection()
     {
       bip();
       stage = 3;
-      printOLED("PRESS", "B");
     }
+    delay(50);
+    break;
+  case 3:
+    stage = 0;
     delay(50);
     break;
   }
 }
 void ResetRoute()
 {
-  if (buttonA.isPressed())
-  {
-    bip();
-    clearCommandArray();
-    printOLED("ROUTE", "CLEARED!");
-    // Reset states
-    movementCommand = 0;
-    movementParameter = 0;
-    resetEncoders();
-    buttonA.waitForRelease();
-    chosenCommand = 0;
-    stage = 0;
-    routeIndex = 0;
-  }
+  clearCommandArray();
+  printOLED("ROUTE", "CLEARED!");
+  delay(1000);
+  // Reset states
+  movementCommand = 0;
+  movementParameter = 0;
+  resetEncoders();
+
+  chosenCommand = 1;
+  stage = 0;
+  routeIndex = 0;
+  delay(50);
 }
 void clearCommandArray()
 {
@@ -650,8 +676,15 @@ void clearCommandArray()
 }
 void AddNewRoute()
 {
-  int corridor = 0;
-  int room = 0;
+  if (routeIndex >= sizeA)
+  {
+    printOLED("MAX", "ROUTES!");
+    delay(1000);
+    stage = 0;
+    return;
+  }
+  int corridor = 100;
+  int room = 1;
   int route_stage = 0; // 0 select corridor, 1 select room
   while (route_stage == 0)
   {
@@ -670,8 +703,8 @@ void AddNewRoute()
       bip();
       movementParameter = 0;
       corridor -= 100;
-      if (corridor < 0)
-        corridor = 0;
+      if (corridor < 100)
+        corridor = 100;
     }
     // OLEDSelectParameter();
     if (buttonA.isPressed())
@@ -701,8 +734,8 @@ void AddNewRoute()
       bip();
       movementParameter = 0;
       room -= 1;
-      if (room < 0)
-        room = 0;
+      if (room < 1)
+        room = 1;
     }
     // OLEDSelectParameter();
     if (buttonA.isPressed())
@@ -739,10 +772,16 @@ void selectMovement()
   OLEDSelectMovement();
   if (buttonA.isPressed())
   {
+    if (chosenCommand == 2)
+    {
+      printOLED("PRESS", "B");
+      delay(200);
+    }
     bip();
     stage = 1;
     buttonA.waitForRelease(); // wait till the button is released
   }
+  delay(50);
 }
 void OLEDSelectMovement()
 {
@@ -764,21 +803,31 @@ void OLEDSelectMovement()
 }
 void ExecuteProgram()
 {
-  printOLED("EXECUTING", "PATH");
-  delay(1000);
-  printOLED("GYRO", "START");
-  delay(2000);
-  // Reset states
-  movementCommand = 0;
-  movementParameter = 0;
-  resetEncoders();
-  chosenCommand = 0;
-  stage = 0;
-  stopCon = routeIndex - 1;
-  routeIndex = 0;
+  if (commandArray[0][0] != 0)
+  {
+    printOLED("EXECUTING", "PATH");
+    delay(1000);
+    printOLED("GYRO", "START");
+    delay(2000);
+    // Reset states
+    movementCommand = 0;
+    movementParameter = 0;
+    resetEncoders();
+    chosenCommand = 1;
+    stage = 0;
+    stopCon = routeIndex - 1;
+    routeIndex = 0;
 
-  // Terminating the startup loop
-  startup_start_con = false;
+    // Terminating the startup loop
+    startup_start_con = false;
+  }
+  else
+  {
+    printOLED("NO", "PATHS!");
+    delay(1000);
+    stage = 0;
+    chosenCommand = 1;
+  }
 }
 // Sound functions
 void bip()
