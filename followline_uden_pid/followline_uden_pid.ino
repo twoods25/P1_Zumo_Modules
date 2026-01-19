@@ -16,34 +16,18 @@ unsigned long printInterval = 500;
 
 void forward() {
   motors.setSpeeds(speed, speed);  // kør med defineret hastighed
-  Serial.print("OutputL: ");
-  Serial.println(speed);
-  Serial.print("OutputR: ");
-  Serial.println(speed);
 }
 
 void backwards() {
   motors.setSpeeds(-speed, -speed);  // kør baglæns med defineret hastighed
-  Serial.print("OutputL: ");
-  Serial.println(-speed);
-  Serial.print("OutputR: ");
-  Serial.println(-speed);
 }
 
 void turnRight() {
   motors.setSpeeds(-speed, speed);  // drej til venstre med defineret hastighed
-  Serial.print("OutputL: ");
-  Serial.println(-speed);
-  Serial.print("OutputR: ");
-  Serial.println(speed);
 }
 
 void turnLeft() {
   motors.setSpeeds(speed, -speed);  // drej til højre med defineret hastighed
-  Serial.print("OutputL: ");
-  Serial.println(speed);
-  Serial.print("OutputR: ");
-  Serial.println(-speed);
 }
 
 void stop() {
@@ -56,7 +40,7 @@ void calibrateSensors() {
 
 void printFast() {
   Serial.print("Error: ");
-  Serial.println(lineSensors.readLine(lineSensorValues) - 1000);
+  Serial.println(1000 - lineSensors.readLine(lineSensorValues));
 }
 
 void printSlow() {
@@ -70,18 +54,18 @@ void printSlow() {
 
 void FollowLine() {
   short position = lineSensors.readLine(lineSensorValues);
-  int error = position - 1000;
+  int error = 1000 - position;
   if (error == 0) {
     forward();
   }
-  else if (error < 0) {
+  else if (error > 0) {
     turnRight();
     }
-  else if (error > 0) {
+  else if (error < 0) {
     turnLeft();
     }
   printFast();
-  delay(250);  
+  delay(100);  
 }
 
 void setup() {
