@@ -44,15 +44,14 @@ void printFast() {
   Serial.println(1000 - lineSensors.readLine(lineSensorValues));
 }
 
-
-void printSlow() {
+/*void printSlow() {
   unsigned long now = millis(); // get the current time in milliseconds since the program started
   if (now - lastPrintTime >= printInterval) { // check if enough time has passed since the last print (based on printInterval)
     lastPrintTime = now; // update the last print time to the current time
     Serial.print("Position: ");
     Serial.println(lineSensors.readLine(lineSensorValues) - 1000);
   }
-}
+}*/
 
 void FollowLine() {
   short position = lineSensors.readLine(lineSensorValues);
@@ -86,6 +85,6 @@ void setup() {
 
 void loop() {
   FollowLine();
-  printSlow();
+  delay(200);
 }
 

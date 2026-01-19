@@ -13,6 +13,7 @@ Zumo32U4ProximitySensors prox;
 
 int RunRoute = 0;
 int number = 1;
+int stopCon = 0;
 
 // ------------------------------------ Array initialization variables ------------------------------------
 // vars to count the accumulated counts of the encoders
@@ -81,26 +82,31 @@ unsigned short hvid = 500;                    // tærskelværdi for hvid (høj v
 void setup()
 {
   Serial.begin(9600);
-  // startup();
+  startup();
+  gyroSetupIntruction(); // setup gyro / IMU
+  printOLED("READ", "LINE");
+  lineSensorSetupIntruction(); // setup line sensors and calibrate
+}
+
+void loop()
+{
+  // AvoidObstacles();
+  Corridor_Turn();
+  followLine();
+}
+
+void gyroSetupIntruction()
+{
   delay(2000);
   turnSensorSetup(); // configure gyro / IMU
   delay(500);
-  turnSensorReset();      // reset gyro heading to 0
-  OLED.clear();           // clear display
-  motors.setSpeeds(0, 0); // ensure motors stopped
-  delay(1000);
+  turnSensorReset(); // reset gyro heading to 0
+}
+void lineSensorSetupIntruction()
+{
   lineSensors.initThreeSensors(); // initialiserer de tre sensorer
   prox.initThreeSensors();
   delay(500);
-
-  // Initialize commandArray with some example values
-  commandArray[RunRoute][0] = 100; // Example: Turn after 3 corridors
-  commandArray[RunRoute][1] = 3;   // Example: Turn to room number 2
-  commandArray[1][0] = 100;        // Example: Turn after 3 corridors
-  commandArray[1][1] = 4;          // Example: Turn to room number 2
-  commandArray[2][0] = 100;        // Example: Turn after 3 corridors
-  commandArray[2][1] = 1;          // Example: Turn to room number 2
-
   printOLED("LineCal", "MOVE");
   delay(400);
   unsigned long timeStartUp = millis();
@@ -118,27 +124,6 @@ void setup()
   lineSensors.readCalibrated(lineSensorValues);
   // omregner min- og max-værdierne, således at de henholdsvis bliver 0 og 2000
 }
-
-void loop()
-{
-  // AvoidObstacles();
-  Corridor_Turn();
-  followLine();
-
-  /*/ lineSensors.read(lineSensorValues, QTR_EMITTERS_ON); // læser sensorerne og gemmer værdierne i arrayet [NUM_SENSORS]
-  lineSensors.calibrate();
-  lineSensors.readCalibrated(lineSensorValues);
-
-  Serial.println("Line Sensor Values: ");
-  Serial.print(lineSensorValues[0]);
-  Serial.print(", ");
-  Serial.print(lineSensorValues[1]);
-  Serial.print(", ");
-  Serial.println(lineSensorValues[2]);
-  delay(1500);
-  // Debugging line sensor values*/
-}
-
 void followLine()
 {
   short position = lineSensors.readLine(lineSensorValues);
@@ -222,6 +207,7 @@ void Corridor_Turn() // !!!!!!!!!!!!!IMPORTANT  I NEED SOME KIND OF DELAY HERE O
       }
       else
       {
+        printOLED("SKIPS", "ToNEXT");
         forward();
         delay(800);
       }
@@ -265,15 +251,17 @@ void Corridor_Turn() // !!!!!!!!!!!!!IMPORTANT  I NEED SOME KIND OF DELAY HERE O
     // logic for driving back on "highway"
     if (lineSensorValues[1] < 200)
     {
-      Serial.println("I was here!!!");
       if ((corridorCount == 3) || (corridorCount == 4))
       {
-        forward();
-        delay(200);
         printOLED("BACK", "HIGHWAY");
         DriveTurn(90, 1); // turn left 90 degrees (1 = left)
         corridorCount = 0;
         hospitalState = 5; // change state to searching for corridors
+        unsigned long startTime = millis();
+        while (millis() - startTime < 3000)
+        {
+          followLine();
+        }
       }
       else
       {
@@ -287,14 +275,36 @@ void Corridor_Turn() // !!!!!!!!!!!!!IMPORTANT  I NEED SOME KIND OF DELAY HERE O
     break;
   case 5:
     // logic for going back to pickup point, (0,0)
-    if (lineSensorValues[1] < 200)
+    if ((lineSensorValues[0] < 200) && (lineSensorValues[2] < 200) && (lineSensorValues[1] < 200))
     {
       printOLED("PICKUP", "REACHED");
       forward();
       delay(700);
+      if (RunRoute == stopCon)
+      {
+        hospitalState = 6; // Restart program
+      }
       hospitalState = 0;
       RunRoute++;
     }
+    break;
+  case 6:
+    hospitalState = 0;
+    RunRoute = 0;
+    while (1)
+    {
+      stop();
+    }
+    unsigned long startTime = millis();
+    while (millis() - startTime < 3000)
+    {
+      printOLED("PROGRAM", "ENDED");
+      delay(700);
+      printOLED("RESTART", "IN 3s");
+    }
+    printOLED("RESTART", "PROGRAM");
+    delay(2000);
+    setup();
     break;
   default:
     break;
@@ -764,6 +774,7 @@ void ExecuteProgram()
   resetEncoders();
   chosenCommand = 0;
   stage = 0;
+  stopCon = routeIndex - 1;
   routeIndex = 0;
 
   // Terminating the startup loop
